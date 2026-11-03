@@ -1,0 +1,262 @@
+Home Lab Cybersecurity Preparedness & Security Audit Runbook
+
+Document type: Defensive security audit/operational checklist
+Version: 1.0 — public sanitized edition
+Status: Template; audit results not included
+Audience: Home-lab operators, cybersecurity students, and authorized administrators
+Public-document rule: Do not put actual IP addresses, private DNS names, usernames, internal diagrams, credentials, device identifiers, backup paths, raw logs, or unredacted configuration files in this document. Store that information in a private asset register and evidence store.
+
+Purpose and scope
+This runbook provides a repeatable workflow to:
+1. Identify systems and software requiring protection.
+2. Review network boundaries and access controls.
+3. Verify monitoring, alerting, and log collection.
+4. Review repositories, software dependencies, and secret-handling practices.
+5. Confirm backups can be restored.
+6. Prepare, exercise, and document incident response.
+Scope: Only personally owned or explicitly authorized lab assets. Excludes production systems or third-party environments without permission.
+
+Working method: Inventory → Verify → Assess → Remediate → Retest → Document. Perform read-only checks first; plan changes and disruptions separately.
+2. Before starting
+- [ ] Confirm authorized scope and a private list of in-scope assets.
+- [ ] Confirm a current backup and an appropriate rollback method for planned changes.
+- [ ] Decide where private audit evidence will be stored and who can access it.
+- [ ] Record a start time, audit owner, and intended maintenance window.
+- [ ] Verify that test notifications will not trigger unnecessary escalations.
+Privilege and safety conventions
+- [USER] Read-only command, usually executable without elevation.
+- [ADMIN] Requires administrator/root access or privileged product role; inspect commands first.
+- [CHANGE] Alters configuration, service state, credentials, or data. Never run as part of a read-only audit without explicit approval and rollback planning.
+- [TEST] May generate alerts or temporary service effects; perform in an isolated, authorized context.
+The commands below are examples, not a vendor- or version-specific guarantee. Record results privately; sanitize any output before publication.
+3. Asset and software inventory
+Goal: Be able to answer quickly whether a disclosed CVE affects anything in the lab.
+Windows workstation checks
+[USER] Identify operating-system version
+Get-ComputerInfo |
+  Select-Object CsName, WindowsProductName, WindowsVersion, OsBuildNumber
+[USER] Identify hardware and BIOS details (private inventory only)
+Get-CimInstance Win32_ComputerSystem |
+  Select-Object Manufacturer, Model, TotalPhysicalMemory
+Get-CimInstance Win32_BIOS |
+  Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate
+[USER] Review application inventory and available updates
+winget list
+winget upgrade
+[USER] Review TCP listeners and associated processes
+Get-NetTCPConnection -State Listen |
+  Select-Object LocalAddress, LocalPort, OwningProcess
+If a listener requires investigation, review its owning process with Get-Process -Id <PID>. Actual outputs may expose local network details: do not publish them.
+Linux host checks
+[USER] Verify OS, kernel, storage, and listeners
+hostnamectl
+cat /etc/os-release
+uname -r
+lsblk -f
+df -hT
+ss -tuln
+[USER] Review installed packages and pending updates (Debian-based example)
+dpkg-query -W -f='${binary:Package} ${Version}\n'
+apt list --upgradable
+Do not automatically install updates on critical hosts without reviewing dependencies, maintenance windows, and recovery options.
+Docker inventory
+[ADMIN] List containers and images
+sudo docker ps -a
+sudo docker image ls
+sudo docker compose ps --all
+Run the Compose command from an authorized project directory. Review whether containers have unnecessary published ports, privileged mode, broad volume mounts, or unmaintained images.
+
+Do not paste unredacted docker inspect output or Compose environment files into a public repository. They may expose secrets, local paths, and internal topology.
+Private inventory record
+Field	Example/instruction
+Asset ID	Use a private opaque identifier, e.g. ASSET-001
+Role/owner	Record internally
+OS/version	Record internally
+Applications and versions	Record internally
+Exposure/importance	Internal-only, local-only, or approved remote access
+Patch status	Current/pending / unsupported/unknown
+Last reviewed	YYYY-MM-DD
+
+
+Pass condition: Every in-scope asset has an owner, role, software baseline, and update status. Unknown or unsupported software becomes a tracked finding.
+4. Network security and access audit
+Goal: Check that trust boundaries and permitted connections match the intended design.
+Managed router, switch, and wireless review
+[ADMIN] Review in the management console:
+1. Verify expected devices are present and healthy.
+2. Record firmware versions in the private register.
+3. Review administrative accounts, MFA availability, and management-plane access.
+4. Identify intended segments (trusted, guest, IoT, test, management) without publishing VLAN IDs or subnets.
+5. Review firewall/ACL rules and unnecessary broad allow rules.
+6. Review wireless encryption, guest isolation, and obsolete SSIDs.
+7. Export a configuration backup to a protected private location when supported.
+[USER] Test an approved connection from an authorized Windows client
+Test-NetConnection <APPROVED_HOST> -Port <TEST_PORT>
+Expected results must be defined before the test. A successful TCP connection proves reachability, not authorization; a failure may reflect a host firewall or stopped service rather than segmentation alone.
+DNS review
+[USER] Test the intended resolver
+nslookup <APPROVED_INTERNAL_NAME> <APPROVED_DNS_SERVER>
+Review resolution accuracy, resolver availability, client assignment, upstream settings, and unexpected query patterns. Keep private hostnames and query logs out of the public repository.
+Remote exposure review
+[ADMIN] Examine:
+- Inbound port forwards and firewall policies on every relevant gateway.
+- UPnP and remote administration settings.
+- VPN and identity controls for authorized remote access.
+- IPv4 and IPv6 exposure.
+- Whether management UIs are unnecessarily internet reachable.
+Pass condition: Documented intended network flows succeed; prohibited flows fail; internet-facing services and remote-access paths are explicitly authorized.
+
+[CHANGE] Do not change VLANs, gateway settings, ACLs, or DNS routing during the initial evidence-collection pass. Preserve a rollback path before changes.
+5. Monitoring and alert validation
+Goal: Confirm tools produce useful evidence and send notifications, rather than merely showing a healthy dashboard.
+DNS filtering / query monitoring
+- [ ] Resolver process is active and test queries work.
+- [ ] Intended clients are using the correct resolver.
+- [ ] Logging and retention meet privacy expectations.
+- [ ] Unexpected clients or high-volume anomalies can be investigated.
+Availability monitoring
+- [ ] Critical service checks exist and have sensible intervals.
+- [ ] Notification destinations are configured and restricted.
+- [ ] [TEST] A temporary, noncritical unreachable test target produces a down alert.
+- [ ] Recovery state is detected and the temporary test is removed.
+Host and container metrics
+- [ ] CPU, memory, disk, and network data is current.
+- [ ] Disk exhaustion and resource alerts have reasonable thresholds.
+- [ ] Notification routing is tested using safe product-supported methods.
+SIEM / endpoint telemetry
+- [ ] Expected agents or log sources are reporting.
+- [ ] Endpoint identifiers and event timestamps are accurate.
+- [ ] Authentication, file-integrity, vulnerability, and configuration telemetry are reviewed as applicable.
+- [ ] [TEST] A harmless event on an authorized test endpoint appears in the platform.
+- [ ] Alert triage and escalation are documented.
+Pass condition: For each critical event type, know where the evidence appears, who is notified, and how a responder can investigate. Record screenshots and event IDs only in private evidence storage.
+6. Repository and software supply-chain security
+Goal: Reduce risks from published code, dependencies, credentials, and automation permissions.
+GitHub review
+1. Confirm repository visibility is intentional (public versus private).
+2. Review access granted to collaborators, integrations, and automation.
+3. Check repository security alerts and available secret-scanning controls.
+4. Review workflow permissions and third-party actions.
+5. Verify .gitignore covers local secrets, generated artifacts, and sensitive exports where appropriate.
+6. Review Git history, not only the current files, before publication.
+Do not upload: .env files, private keys, tokens, credentialed URLs, network configuration exports, recovery images, raw logs, or sensitive screenshots.
+Dependency review
+[USER] Run from the relevant project directory when applicable:
+npm audit
+pip-audit
+pip-audit must be separately installed. Results apply to the supported dependency ecosystem and do not replace source-code review, runtime testing, or vendor advisories.
+If a secret is exposed
+1. [CHANGE] Revoke or rotate the affected credential first.
+2. Review usage and access records for potential misuse.
+3. Remove the secret from active files and address repository history using an approved process.
+4. Review permissions, related credentials, and automation integrations.
+5. Track remediation in a private incident record.
+Pass condition: Repository visibility, access, automation scope, and vulnerable dependencies have been reviewed; exposed secrets have documented remediation.
+
+References: GitHub security documentation · Docker security guidance
+7. Backup and restore readiness
+Goal: Verify recoverability, not just the existence of a backup file.
+Network-attached storage
+[ADMIN] In the storage console:
+1. Review disk/volume health, capacity, and critical alerts.
+2. Confirm backup destinations, retention, and access restrictions.
+3. Check for an independent copy that would remain available if primary storage failed or was compromised.
+4. [TEST] Restore a non-sensitive sample file to a separate directory.
+5. Verify the file opens and, where appropriate, matches a trusted checksum.
+Reminder: RAID and drive redundancy are not substitutes for backups.
+
+Linux system/device images
+[USER] Check a backup-image hash in a private location
+sha256sum <BACKUP_IMAGE_PATH>
+Compare it against a previously recorded trusted hash. A newly generated hash alone does not prove that an image is complete or bootable.
+
+[TEST] Restore to spare media or an isolated environment, not the active system drive. Validate boot, network behavior, essential services, and needed data.
+Windows and macOS workstations
+- [ ] Confirm relevant files or system images are actually included.
+- [ ] Verify recent completion and protected backup destinations.
+- [ ] [TEST] Restore a harmless sample file to a separate location.
+- [ ] Document recovery blockers without publishing sensitive filenames or paths.
+Pass condition: At least one representative restore succeeds, critical services/data are validated, and restore issues are tracked.
+8. Incident-response procedure
+Based on the lifecycle and continuous improvement principles in NIST SP 800-61 Rev. 3.
+A. Identify and assess
+1. Record an alert, time (with time zone), affected asset ID, and reporting source.
+2. Preserve relevant logs and evidence appropriately.
+3. Determine whether the event is suspicious activity, a vulnerability finding, or a confirmed incident.
+4. Check trusted advisories and evaluate actual exposure, business impact, and signs of exploitation.
+B. Contain
+1. Choose proportionate steps to limit further harm (for example, restrict access or revoke compromised tokens).
+2. Preserve evidence before destructive steps when feasible and safe.
+3. Record what changed, by whom, and when.
+C. Eradicate and remediate
+1. Investigate root cause and affected scope.
+2. Patch, rebuild, or correct affected systems as appropriate.
+3. Rotate exposed secrets and validate access controls.
+4. Retest the issue and relevant monitoring.
+D. Recover and learn
+1. Restore trusted data and service configurations.
+2. Monitor for recurrence or persistence.
+3. Create an incident timeline and identify detection/control gaps.
+4. Assign improvements, owners, and review dates.
+Caution: Immediate rebooting or wiping can destroy evidence. Balance preservation with the need to stop ongoing harm.
+
+                                              Private incident record template
+Field	Placeholder
+Incident ID	IR-YYYY-###
+Reported at / timezone	<PRIVATE>
+Affected asset(s)	<PRIVATE ASSET IDS>
+Category / severity	<CATEGORY> / <SEVERITY>
+Initial alert/source	<PRIVATE>
+Evidence reference	<PRIVATE EVIDENCE LOCATION>
+Assessment and scope	<PRIVATE>
+Containment and remediation	<PRIVATE>
+Recovery verification	<PRIVATE>
+Lessons/actions/owners	<PRIVATE>
+Closure	<DATE>
+
+
+Only publish a high-level, redacted case study after verifying it contains no sensitive information.
+9. Tracking and review cadence
+Review	Suggested cadence
+Confirm monitoring and alert routing	Weekly
+Review urgent advisories and applicable updates	Weekly + when critical advisories appear
+Update inventory and review dependencies	Monthly
+Verify backup jobs	Monthly
+Review access boundaries and exposed services	Quarterly
+Exercise alert handling and sample restoration	Quarterly
+Refresh overall runbook	Annually + after significant incidents
+
+
+Private remediation tracker template
+Finding ID	Asset ID	Risk	Evidence pointer	Fix owner	Status	Retest date
+FIND-001	<PRIVATE>	<LEVEL>	<PRIVATE>	<OWNER>	Open	<DATE>
+
+
+Avoid publishing real finding details that describe exploitable weaknesses in your live environment.
+10. Completion criteria
+- [ ] All in-scope systems and software have a private inventory entry.
+- [ ] Intended and prohibited network paths have been verified.
+- [ ] Exposure and privileged-access reviews have been completed.
+- [ ] Monitoring and notifications have been exercised safely.
+- [ ] Repository and dependency reviews have been performed.
+- [ ] A representative backup restore has passed.
+- [ ] Incident-response contacts, evidence handling, and recovery steps are documented privately.
+- [ ] Findings have owners, remediation dates, and retest plans.
+Important: Checking these boxes means the audit activities were performed; it is not a guarantee that the environment is free of vulnerabilities.
+11. Public publishing checklist
+Before every commit or release:
+- [ ] Search text and filenames for real IPs, domains, hostnames, usernames, emails, and file paths.
+- [ ] Confirm no tokens, passwords, private keys, .env files, or full configuration exports are included.
+- [ ] Strip screenshots and logs of private details, including metadata where applicable.
+- [ ] Confirm no specific firewall policies, private VLAN IDs, remote-access routes, or sensitive findings are disclosed.
+- [ ] Review staged changes and commit history for accidental exposure.
+- [ ] Keep real audit results in private documentation, not public issues or pull requests.
+12. Sources and additional documentation
+- NIST CSF 2.0
+- NIST SP 800-61 Rev. 3 — Incident Response
+- CISA Known Exploited Vulnerabilities
+- CISA Cybersecurity Performance Goals
+- GitHub Code Security
+- Docker Documentation
+- Microsoft PowerShell Documentation
+Publication note: This is a sanitized methodology, not a public disclosure of the private lab's actual configuration, audit findings, security posture, or recovery readiness.
