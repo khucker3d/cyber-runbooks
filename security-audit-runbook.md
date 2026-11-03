@@ -1,16 +1,13 @@
 # Home Lab Cybersecurity Preparedness & Security Audit Runbook
 
-**Document type:** Defensive security audit / operational checklist  
-**Version:** 1.0 — public sanitized edition  
-**Status:** Template; audit results not included  
-**Audience:** Home-lab operators, cybersecurity students, and authorized administrators
+Defensive security audit/operational checklist
+v1.0 (sanitized)
 
 > **Public-document rule:** Do not put actual IP addresses, private DNS names, usernames, internal diagrams, credentials, device identifiers, backup paths, raw logs, or unredacted configuration files in this document. Store that information in a private asset register and evidence store.
 
-## 1. Purpose and scope
+## Purpose & Scope
 
-This runbook provides a repeatable workflow to:
-
+**Purpose:** This runbook provides a repeatable workflow to:
 1. Identify systems and software requiring protection.
 2. Review network boundaries and access controls.
 3. Verify monitoring, alerting, and log collection.
@@ -20,10 +17,11 @@ This runbook provides a repeatable workflow to:
 
 **Scope:** Only personally owned or explicitly authorized lab assets. Excludes production systems or third-party environments without permission.
 
-**Working method:** **Inventory → Verify → Assess → Remediate → Retest → Document.** Perform read-only checks first; plan changes and disruptions separately.
+**Working method:** 
+- Inventory > Verify > Assess > Remediate > Retest > Document. 
+- Perform read-only checks first; plan changes and disruptions separately.
 
-## 2. Before starting
-
+## Before starting
 - [ ] Confirm authorized scope and a private list of in-scope assets.
 - [ ] Confirm a current backup and an appropriate rollback method for planned changes.
 - [ ] Decide where private audit evidence will be stored and who can access it.
@@ -39,7 +37,7 @@ This runbook provides a repeatable workflow to:
 
 The commands below are examples, not a vendor- or version-specific guarantee. Record results privately; sanitize any output before publication.
 
-## 3. Asset and software inventory
+## Asset and software inventory
 
 **Goal:** Be able to answer quickly whether a disclosed CVE affects anything in the lab.
 
@@ -48,17 +46,14 @@ The commands below are examples, not a vendor- or version-specific guarantee. Re
 **[USER] Identify operating-system version**
 
 ```powershell
-Get-ComputerInfo |
-  Select-Object CsName, WindowsProductName, WindowsVersion, OsBuildNumber
+Get-ComputerInfo | Select-Object CsName, WindowsProductName, WindowsVersion, OsBuildNumber
 ```
 
 **[USER] Identify hardware and BIOS details** (private inventory only)
 
 ```powershell
-Get-CimInstance Win32_ComputerSystem |
-  Select-Object Manufacturer, Model, TotalPhysicalMemory
-Get-CimInstance Win32_BIOS |
-  Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate
+Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, TotalPhysicalMemory
+Get-CimInstance Win32_BIOS | Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate
 ```
 
 **[USER] Review application inventory and available updates**
@@ -71,8 +66,7 @@ winget upgrade
 **[USER] Review TCP listeners and associated processes**
 
 ```powershell
-Get-NetTCPConnection -State Listen |
-  Select-Object LocalAddress, LocalPort, OwningProcess
+Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess
 ```
 
 If a listener requires investigation, review its owning process with `Get-Process -Id <PID>`. Actual outputs may expose local network details: **do not publish them.**
@@ -109,7 +103,7 @@ sudo docker image ls
 sudo docker compose ps --all
 ```
 
-Run the Compose command from an authorized project directory. Review whether containers have unnecessary published ports, privileged mode, broad volume mounts, or unmaintained images.
+Run the Compose command from an authorized project directory. Check for unnecessary published ports, privileged mode, broad volume mounts, or unmaintained images.
 
 **Do not paste unredacted `docker inspect` output or Compose environment files into a public repository.** They may expose secrets, local paths, and internal topology.
 
@@ -121,8 +115,8 @@ Run the Compose command from an authorized project directory. Review whether con
 | Role / owner | Record internally |
 | OS / version | Record internally |
 | Applications and versions | Record internally |
-| Exposure / importance | Internal-only, local-only, or approved remote access |
-| Patch status | Current / pending / unsupported / unknown |
+| Exposure/importance | Internal-only, local-only, or approved remote access |
+| Patch status | Current/pending / unsupported/unknown |
 | Last reviewed | YYYY-MM-DD |
 
 **Pass condition:** Every in-scope asset has an owner, role, software baseline, and update status. Unknown or unsupported software becomes a tracked finding.
@@ -169,7 +163,7 @@ Review resolution accuracy, resolver availability, client assignment, upstream s
 - UPnP and remote administration settings.
 - VPN and identity controls for authorized remote access.
 - IPv4 **and** IPv6 exposure.
-- Whether management UIs are unnecessarily internet reachable.
+- Whether management UIs are unnecessarily internet-reachable.
 
 **Pass condition:** Documented intended network flows succeed; prohibited flows fail; internet-facing services and remote-access paths are explicitly authorized.
 
@@ -179,7 +173,7 @@ Review resolution accuracy, resolver availability, client assignment, upstream s
 
 **Goal:** Confirm tools produce useful evidence and send notifications, rather than merely showing a healthy dashboard.
 
-### DNS filtering / query monitoring
+### DNS filtering/query monitoring
 
 - [ ] Resolver process is active and test queries work.
 - [ ] Intended clients are using the correct resolver.
@@ -191,11 +185,11 @@ Review resolution accuracy, resolver availability, client assignment, upstream s
 - [ ] Critical service checks exist and have sensible intervals.
 - [ ] Notification destinations are configured and restricted.
 - [ ] **[TEST]** A temporary, noncritical unreachable test target produces a down alert.
-- [ ] Recovery state is detected and the temporary test is removed.
+- [ ] Recovery state is detected, and the temporary test is removed.
 
 ### Host and container metrics
 
-- [ ] CPU, memory, disk, and network data is current.
+- [ ] CPU, memory, disk, and network data are current.
 - [ ] Disk exhaustion and resource alerts have reasonable thresholds.
 - [ ] Notification routing is tested using safe product-supported methods.
 
@@ -209,7 +203,7 @@ Review resolution accuracy, resolver availability, client assignment, upstream s
 
 **Pass condition:** For each critical event type, know where the evidence appears, who is notified, and how a responder can investigate. Record screenshots and event IDs only in private evidence storage.
 
-## 6. Repository and software supply-chain security
+## Repository and software supply-chain security
 
 **Goal:** Reduce risks from published code, dependencies, credentials, and automation permissions.
 
@@ -250,7 +244,7 @@ pip-audit
 
 References: [GitHub security documentation](https://docs.github.com/en/code-security) · [Docker security guidance](https://docs.docker.com/engine/security/)
 
-## 7. Backup and restore readiness
+## Backup and restore readiness
 
 **Goal:** Verify recoverability, not just the existence of a backup file.
 
@@ -266,7 +260,7 @@ References: [GitHub security documentation](https://docs.github.com/en/code-secu
 
 **Reminder:** RAID and drive redundancy are not substitutes for backups.
 
-### Linux system / device images
+### Linux system/device images
 
 **[USER] Check a backup-image hash in a private location**
 
@@ -287,7 +281,7 @@ Compare it against a **previously recorded trusted hash**. A newly generated has
 
 **Pass condition:** At least one representative restore succeeds, critical services/data are validated, and restore issues are tracked.
 
-## 8. Incident-response procedure
+## Incident-response procedure
 
 Based on the lifecycle and continuous improvement principles in [NIST SP 800-61 Rev. 3](https://csrc.nist.gov/pubs/sp/800/61/r3/final).
 
@@ -338,7 +332,7 @@ Based on the lifecycle and continuous improvement principles in [NIST SP 800-61 
 
 Only publish a high-level, redacted case study after verifying it contains no sensitive information.
 
-## 9. Tracking and review cadence
+## Tracking and review cadence
 
 | Review | Suggested cadence |
 | --- | --- |
@@ -358,7 +352,7 @@ Only publish a high-level, redacted case study after verifying it contains no se
 
 Avoid publishing real finding details that describe exploitable weaknesses in your live environment.
 
-## 10. Completion criteria
+## Completion criteria
 
 - [ ] All in-scope systems and software have a private inventory entry.
 - [ ] Intended and prohibited network paths have been verified.
@@ -371,7 +365,7 @@ Avoid publishing real finding details that describe exploitable weaknesses in yo
 
 **Important:** Checking these boxes means the audit activities were performed; it is not a guarantee that the environment is free of vulnerabilities.
 
-## 11. Public publishing checklist
+## Public publishing checklist
 
 Before every commit or release:
 
@@ -382,10 +376,10 @@ Before every commit or release:
 - [ ] Review staged changes **and commit history** for accidental exposure.
 - [ ] Keep real audit results in private documentation, not public issues or pull requests.
 
-## 12. Sources and additional documentation
+## Sources and additional documentation
 
 - [NIST CSF 2.0](https://www.nist.gov/cyberframework)
-- [NIST SP 800-61 Rev. 3 — Incident Response](https://csrc.nist.gov/pubs/sp/800/61/r3/final)
+- [NIST SP 800-61 Rev. 3 - Incident Response](https://csrc.nist.gov/pubs/sp/800/61/r3/final)
 - [CISA Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
 - [CISA Cybersecurity Performance Goals](https://www.cisa.gov/cybersecurity-performance-goals)
 - [GitHub Code Security](https://docs.github.com/en/code-security)
